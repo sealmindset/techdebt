@@ -1,0 +1,163 @@
+{
+  "project_name": "TechDebt",
+  "purpose": "SaaS and software rationalization platform that aggregates data from multiple sources (Workday, AuditBoard, Entra ID, voluntary submissions) to analyze application usage, cost, and adoption — then uses AI to recommend keep/cut/replace/consolidate decisions with evidence-based justification",
+  "project_type": "web-app",
+  "active_tiers": [0, 1],
+  "scaffold": "fastapi-nextjs",
+  "features": [
+    "Dashboard with total apps under review, total spend, avg adoption rate, AI recommendation breakdown",
+    "Application portfolio list with search, filter by category/status/recommendation",
+    "App detail pages with usage stats, cost per user, adoption rates, trend data",
+    "AI-powered rationalization recommendations (keep/cut/replace/consolidate) with evidence",
+    "Decision workflow: department head submits recommendation with justification, IT/finance reviews",
+    "Data source management showing sync status for Workday, AuditBoard, Entra ID",
+    "Category management (Productivity, Security, DevOps, HR, Finance, Collaboration, Analytics, Communication, Project Management, Infrastructure)",
+    "Voluntary app submission form",
+    "100+ mock apps seeded with realistic usage, cost, and adoption data"
+  ],
+  "users": {
+    "description": "IT Asset Management team, Finance team, Department Heads, and leadership reviewing the company's software portfolio",
+    "types": ["IT Asset Management", "Finance", "Department Heads", "Leadership", "Viewers"],
+    "estimated_count": "50-200",
+    "internal_or_external": "internal"
+  },
+  "auth": {
+    "needed": true,
+    "provider": "azure-ad",
+    "token_expiry": "8 hours"
+  },
+  "roles": [
+    {
+      "name": "Super Admin",
+      "description": "Full system access including user/role management",
+      "is_system": true
+    },
+    {
+      "name": "Admin",
+      "description": "IT Asset Management — manages app portfolio, data sources, reviews decisions",
+      "is_system": true
+    },
+    {
+      "name": "Finance Reviewer",
+      "description": "Reviews cost data, approves/rejects financial decisions on apps",
+      "is_system": true
+    },
+    {
+      "name": "Department Head",
+      "description": "Submits recommendations for apps in their department, provides justification",
+      "is_system": true
+    },
+    {
+      "name": "Viewer",
+      "description": "Read-only access to dashboards and app details",
+      "is_system": true
+    }
+  ],
+  "permissions": {
+    "dashboard": ["read"],
+    "applications": ["read", "create", "update", "delete"],
+    "recommendations": ["read", "create", "update"],
+    "decisions": ["read", "create", "update"],
+    "data_sources": ["read", "update"],
+    "categories": ["read", "create", "update", "delete"],
+    "submissions": ["read", "create"],
+    "admin.users": ["read", "create", "update", "delete"],
+    "admin.roles": ["read", "create", "update", "delete"],
+    "admin.settings": ["read", "update"],
+    "admin.logs": ["read", "delete"]
+  },
+  "stack": {
+    "frontend": "Next.js 15",
+    "backend": "FastAPI",
+    "database": "PostgreSQL 16",
+    "orm": "SQLAlchemy",
+    "validation": "Pydantic",
+    "auth_tokens": "stateless-jwt",
+    "language": "Python 3.12 / TypeScript",
+    "build_tool": "Docker Compose",
+    "runtime": "Docker"
+  },
+  "app_type": "internal-business-tool",
+  "multi_tenancy": {
+    "needed": false,
+    "tenant_type": ""
+  },
+  "ai_features": {
+    "needed": false,
+    "description": "AI recommendations are seeded as mock data for now; real AI integration is a future TODO",
+    "usage_level": "none",
+    "prompt_count_estimate": 0,
+    "prompts": [],
+    "agents": [],
+    "models": [],
+    "who_edits_prompts": "developers",
+    "prompt_management_tier": 0
+  },
+  "ai_providers": {
+    "needed": false,
+    "primary": "",
+    "fallback": ""
+  },
+  "nemo_guardrails": {
+    "enabled": false
+  },
+  "compliance": [],
+  "special_features": ["100+ seeded mock applications with realistic data"],
+  "mock_services": {
+    "mock_oidc": {
+      "needed": true,
+      "host_port": 10090,
+      "container_port": 10090,
+      "test_users": [
+        {"sub": "mock-admin", "email": "admin@techdebt.local", "name": "Admin User", "role": "Super Admin"},
+        {"sub": "mock-itadmin", "email": "itadmin@techdebt.local", "name": "IT Admin", "role": "Admin"},
+        {"sub": "mock-finance", "email": "finance@techdebt.local", "name": "Finance Reviewer", "role": "Finance Reviewer"},
+        {"sub": "mock-depthead", "email": "depthead@techdebt.local", "name": "Department Head", "role": "Department Head"},
+        {"sub": "mock-viewer", "email": "viewer@techdebt.local", "name": "Viewer User", "role": "Viewer"}
+      ]
+    },
+    "custom_mocks": [
+      {"name": "mock-workday", "port": 9001, "description": "Workday procurement/sourcing data"},
+      {"name": "mock-auditboard", "port": 9002, "description": "AuditBoard vendor risk/compliance data"},
+      {"name": "mock-entra", "port": 9003, "description": "Entra ID login/usage analytics"}
+    ]
+  },
+  "integrations": [
+    {"name": "Workday", "type": "procurement", "direction": "read", "mock_port": 9001},
+    {"name": "AuditBoard", "type": "vendor-risk", "direction": "read", "mock_port": 9002},
+    {"name": "Entra ID", "type": "identity-analytics", "direction": "read", "mock_port": 9003}
+  ],
+  "cloud": {
+    "provider": "none",
+    "region": "",
+    "cli_authenticated": false
+  },
+  "deployment": {
+    "target": "",
+    "containerize": true,
+    "prototype_only": false
+  },
+  "security_scanner": {
+    "type": "",
+    "api_url": "",
+    "uses_github_issues": false
+  },
+  "pages": [
+    {"name": "Dashboard", "path": "/dashboard", "description": "Overview metrics, spend breakdown, recommendation summary"},
+    {"name": "Applications", "path": "/applications", "description": "Full app portfolio list with filters"},
+    {"name": "App Detail", "path": "/applications/[id]", "description": "Individual app usage, cost, adoption, recommendations"},
+    {"name": "Recommendations", "path": "/recommendations", "description": "AI recommendations queue with actions"},
+    {"name": "Decisions", "path": "/decisions", "description": "Decision log with approval status tracking"},
+    {"name": "Data Sources", "path": "/data-sources", "description": "Integration status for Workday, AuditBoard, Entra ID"},
+    {"name": "Submissions", "path": "/submissions", "description": "Voluntary app usage submissions from employees"},
+    {"name": "Admin - Users", "path": "/admin/users", "description": "User management"},
+    {"name": "Admin - Roles", "path": "/admin/roles", "description": "Role and permission management"},
+    {"name": "Admin - Settings", "path": "/admin/settings", "description": "Application settings"},
+    {"name": "Admin - Activity Logs", "path": "/admin/logs", "description": "System activity logs"}
+  ],
+  "skipped_guardrails": {
+    "ai_prompt_management": "AI recommendations are seeded as mock data; real AI provider integration deferred to future iteration",
+    "nemo_guardrails": "No live AI features in initial build",
+    "terraform": "No cloud deployment target selected yet"
+  }
+}

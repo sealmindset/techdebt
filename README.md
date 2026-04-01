@@ -1,0 +1,173 @@
+# FastAPI + Next.js Scaffold
+
+## What This Is
+
+This is the infrastructure scaffold used by `/make-it` when building a web application with a FastAPI backend and Next.js frontend. It contains proven, battle-tested patterns extracted from real builds.
+
+The scaffold provides the foundational infrastructure that every app needs -- authentication, database, Docker orchestration, and mock services for local development. Claude copies these files into the new project during the Build phase and replaces placeholders with app-specific values.
+
+## How Claude Uses This During /make-it
+
+1. **Design phase** determines the app slug, ports, users, and integrations
+2. **Build phase** copies scaffold files into the project directory
+3. Placeholders are replaced with values from `app-context.json`
+4. App-specific code (frontend, backend, migrations) is generated on top of this foundation
+5. `seed-mock-services.sh` is customized with the app's users and any extra mock services
+
+## Files
+
+| File | Copied As-Is? | Notes |
+|------|---------------|-------|
+| `mock-services/mock-oidc/` | Yes | Complete mock OIDC provider. Ships unchanged with every app. |
+| `docker-compose.yml` | Customized | Placeholders replaced; additional services added per app |
+| `scripts/seed-mock-services.sh` | Customized | User list and extra mock seeding filled in per app |
+| `.env.example` | Customized | Additional service URLs added per app |
+| `.gitignore` | Yes | Standard Python + Node.js + Docker gitignore |
+| `backend/app/services/log_service.py` | Customized | `techdebt` in service name |
+| `backend/app/middleware/logging.py` | Customized | `techdebt` in service name |
+| `backend/app/routers/logs.py` | Yes | Activity log REST API (events, stats, clear) |
+| `frontend/app/(auth)/admin/logs/page.tsx` | Yes | Activity Logs admin UI page |
+| `backend/tests/conftest.py` | Customized | `techdebt` in emails, `[PERMISSIONS]` placeholders |
+| `backend/tests/integration/test_health.py` | Yes | Health endpoint tests |
+| `e2e/playwright.config.ts` | Customized | `3100` placeholder |
+| `e2e/tests/health.spec.ts` | Yes | Frontend + backend health smoke tests |
+
+## Placeholders
+
+All placeholders use the `[PLACEHOLDER_NAME]` format and are replaced during the Build phase.
+
+| Placeholder | Description | Example |
+|-------------|-------------|---------|
+| `TechDebt` | Human-readable app name | DeliverIt |
+| `techdebt` | Kebab-case identifier (used for DB, containers) | deliver-it |
+| `3100` | Host port mapped to frontend container port 3000 | 3100 |
+| `8100` | Host port mapped to backend container port 8000 | 8100 |
+| `5500` | Host port mapped to PostgreSQL container port 5432 | 5500 |
+| `10090` | Host port mapped to mock-oidc container port 10090 | 10090 |
+| `[SEED_USERS]` | JSON array of `{sub, email, name}` for seed script | See below |
+| `[ADDITIONAL_SERVICE_ENVS]` | Extra env vars in backend service | `JIRA_BASE_URL=...` |
+| `[ADDITIONAL_MOCK_SERVICES]` | Extra service definitions in docker-compose | mock-jira service block |
+| `[ADDITIONAL_MOCK_SEED]` | Extra seeding logic in seed script | Jira project creation |
+| `[ADDITIONAL_SERVICE_URLS]` | Extra env var docs in .env.example | `JIRA_BASE_URL=...` |
+
+### SEED_USERS Example
+
+```bash
+SEED_USERS='[
+  {"sub": "mock-admin", "email": "admin@deliver-it.local", "name": "Admin User"},
+  {"sub": "mock-manager", "email": "manager@deliver-it.local", "name": "Manager User"},
+  {"sub": "mock-user", "email": "user@deliver-it.local", "name": "Regular User"},
+  {"sub": "mock-viewer", "email": "viewer@deliver-it.local", "name": "Viewer User"}
+]'
+```
+
+The `sub` values must exactly match the `oidc_subject` column in the database seed migration. This alignment is what connects "the person who logs in" to "the user row with the correct role."
+
+## Architecture
+
+### Authentication Flow
+
+```
+Browser                Frontend (Next.js)         Backend (FastAPI)        mock-oidc
+  |                         |                          |                      |
+  |-- click "Sign In" ----->|                          |                      |
+  |                         |-- redirect to /authorize ---------------------->|
+  |<-- login page (user list) ------------------------------------------------|
+  |-- select user ---------------------------------------------------------->|
+  |<-- redirect with ?code= ----------------------------                      |
+  |-- /api/auth/callback -->|                          |                      |
+  |                         |-- POST /token (code) ----|--------------------->|
+  |                         |<-- access_token + id_token ----------------------|
+  |                         |-- GET /userinfo ----------|--------------------->|
+  |                         |<-- {sub, email, name} ---|----------------------|
+  |                         |-- POST /auth/callback --->|                      |
+  |                         |                          |-- lookup user by sub  |
+  |                         |                          |-- get role + perms    |
+  |                         |                          |-- create session JWT  |
+  |                         |<-- set cookie + redirect-|                      |
+  |<-- authenticated -------|                          |                      |
+```
+
+Key points:
+- The frontend proxies auth requests to the backend (Next.js API routes)
+- The backend exchanges the code for tokens server-to-server (never exposed to browser)
+- User roles come from the application database, NOT from the OIDC provider
+- The mock-oidc provider only supplies identity (sub, email, name)
+
+### Internal/External URL Split
+
+mock-oidc natively handles the Docker networking split:
+- `MOCK_OIDC_EXTERNAL_BASE_URL` (e.g., `http://localhost:10090`) -- used for the `authorization_endpoint` in the discovery document, since the browser navigates to it directly
+- `MOCK_OIDC_INTERNAL_BASE_URL` (e.g., `http://mock-oidc:10090`) -- used for `token_endpoint`, `userinfo_endpoint`, and `jwks_uri`, since the backend calls these server-to-server inside the Docker network
+
+This eliminates the need for `OIDC_INTERNAL_URL` environment variables or URL rewriting logic in the application.
+
+### RBAC
+
+The database has four tables for role-based access control:
+- `roles` -- system roles (Super Admin, Admin, Manager, User) plus custom roles
+- `permissions` -- page-level CRUD permissions (e.g., `forecasts.view`, `users.create`)
+- `role_permissions` -- junction table mapping roles to permissions
+- `users` -- has a `role_id` foreign key and `oidc_subject` for OIDC identity mapping
+
+Every route handler uses `require_permission(resource, action)` middleware. The app never checks role strings directly.
+
+### Health Checks
+
+All health checks use `127.0.0.1` (not `localhost`) to avoid IPv6 resolution issues in Alpine containers:
+- **Frontend**: `wget --spider -q http://127.0.0.1:3000` (Alpine has wget)
+- **Backend**: `python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"` (slim image, no wget/curl)
+- **mock-oidc**: `python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:10090/health')"` (slim image)
+- **PostgreSQL**: `pg_isready -U techdebt`
+
+### Activity Logs
+
+Every scaffolded app includes an in-memory activity log for observability:
+- **LogStore** -- circular buffer (configurable via `LOG_BUFFER_SIZE`, default 10000) with FIFO eviction
+- **LogEvent** -- captures timestamp, type, method, path, url, status, duration, service, user, ip, user_agent, error
+- **RequestLoggingMiddleware** -- captures inbound API requests (excludes health/static), including client IP and user-agent
+- **attach_outbound_logging()** -- httpx event hooks that log outbound calls with URL sanitization and timing
+- **URL sanitization** -- strips sensitive query params (token, key, secret, password, auth, api_key) before logging
+- **REST API** -- `GET /api/admin/logs/events` (with offset, path, status_min/max, user_email, q filters), `GET /api/admin/logs/stats` (with type/service/status breakdowns), `DELETE /api/admin/logs/events`
+- **Admin UI** -- Activity Logs tab with stats cards, status breakdown bar, filters (type, method, free-text search), event table with user column, auto-refresh toggle, clear button
+- **RBAC** -- requires `admin.logs.read` and `admin.logs.delete` permissions (seeded in the app's seed migration)
+
+#### Outbound Logging
+
+Service clients wire outbound logging during creation using `attach_outbound_logging()`:
+
+```python
+from app.services.log_service import attach_outbound_logging
+
+client = httpx.AsyncClient(base_url=settings.JIRA_BASE_URL)
+attach_outbound_logging(client, "jira")
+```
+
+This is added per-app during the Build phase for each external integration.
+
+### Trailing-Slash ASGI Wrapper
+
+FastAPI registers list endpoints with a trailing slash (e.g., `/api/rfcs/`). When requests arrive through the Next.js reverse proxy without the slash, FastAPI's built-in redirect leaks the internal Docker hostname (e.g., `http://backend:8000/api/rfcs/`). The `TrailingSlashASGI` wrapper in `main.py` silently rewrites matching paths instead of issuing a redirect.
+
+### Test Infrastructure
+
+The scaffold includes a ready-to-use test setup:
+- **pytest.ini** -- asyncio_mode=auto, test discovery config
+- **conftest.py** -- in-memory SQLite with UUID compat, auth bypass via dependency overrides, `admin_client`/`user_client`/`viewer_client` fixtures, `seed_user()` helper
+- **test_health.py** -- health endpoint smoke tests (always valid for any app)
+- **e2e/** -- Playwright config + health smoke test, targeting `http://localhost:3100`
+
+Test users in conftest.py have `[PERMISSIONS]` placeholders that the Build phase fills in to match the app's RBAC seed data.
+
+### Secret Enforcement
+
+The scaffold includes a startup validation gate controlled by `ENFORCE_SECRETS`:
+
+- **`ENFORCE_SECRETS=false`** (default, local dev) -- app starts with weak/mock secrets
+- **`ENFORCE_SECRETS=true`** (production) -- app refuses to start if JWT_SECRET is weak (<32 chars or a known default) or OIDC_CLIENT_SECRET is still the mock value
+
+This is called at startup in `main.py` via `enforce_secrets()`. The /ship-it deployment pipeline sets `ENFORCE_SECRETS=true` in production environment variables.
+
+### Port Selection
+
+Default ports (3000, 5432, 8000) are almost always taken on developer machines running multiple Docker projects. During the Design phase, `/make-it` checks `lsof -i :PORT` and selects available ports. The scaffold placeholders make this remapping seamless.

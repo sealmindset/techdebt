@@ -1,0 +1,95 @@
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.config import enforce_secrets, settings
+from app.middleware.logging import RequestLoggingMiddleware
+from app.routers import auth, logs, permissions, prompts, roles, users
+from app.routers import settings as settings_router
+from app.routers import (
+    applications,
+    dashboard,
+    decisions,
+    recommendations,
+)
+from app.routers.data_sources_router import router as data_sources_router
+from app.routers.submissions_router import router as submissions_router
+
+app = FastAPI(title="techdebt", version="0.1.0")
+
+# Fail fast if ENFORCE_SECRETS=True and secrets are weak
+enforce_secrets()
+
+# Middleware
+app.add_middleware(RequestLoggingMiddleware)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[settings.FRONTEND_URL],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Health check endpoints
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
+@app.get("/api/health")
+async def api_health():
+    return {"status": "ok"}
+
+
+# Core routers (auth, RBAC, admin)
+app.include_router(auth.router)
+app.include_router(users.router)
+app.include_router(roles.router)
+app.include_router(permissions.router)
+app.include_router(settings_router.router)
+app.include_router(logs.router)
+app.include_router(prompts.router)
+
+# Domain routers
+app.include_router(applications.router)
+app.include_router(dashboard.router)
+app.include_router(recommendations.router)
+app.include_router(decisions.router)
+app.include_router(data_sources_router)
+app.include_router(submissions_router)
+
+
+# --------------------------------------------------------------------------
+# Trailing-slash ASGI wrapper
+# --------------------------------------------------------------------------
+# FastAPI registers list endpoints with trailing slash (e.g., /api/rfcs/).
+# Behind a reverse proxy, requests arrive without it (/api/rfcs).
+# FastAPI's built-in redirect leaks the internal Docker hostname.
+# This wrapper silently rewrites matching requests.
+# --------------------------------------------------------------------------
+from starlette.routing import Match  # noqa: E402
+from starlette.types import ASGIApp, Receive, Scope, Send  # noqa: E402
+
+
+_fastapi_app = app  # Save reference before wrapping
+
+
+class TrailingSlashASGI:
+    """Add trailing slash only to paths that have a registered route with one."""
+
+    def __init__(self, inner: ASGIApp):
+        self.inner = inner
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send):
+        if scope["type"] == "http":
+            path = scope["path"]
+            if path.startswith("/api/") and not path.endswith("/"):
+                test_scope = {**scope, "path": path + "/"}
+                for route in _fastapi_app.routes:
+                    match, _ = route.matches(test_scope)
+                    if match == Match.FULL:
+                        scope["path"] = path + "/"
+                        break
+        await self.inner(scope, receive, send)
+
+
+app = TrailingSlashASGI(_fastapi_app)  # type: ignore[assignment]
