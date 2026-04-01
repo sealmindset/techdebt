@@ -1,173 +1,344 @@
-# FastAPI + Next.js Scaffold
+# TechDebt
 
-## What This Is
+**SaaS Rationalization Platform** -- Know what software your organization pays for, who actually uses it, and what to do about it.
 
-This is the infrastructure scaffold used by `/make-it` when building a web application with a FastAPI backend and Next.js frontend. It contains proven, battle-tested patterns extracted from real builds.
+---
 
-The scaffold provides the foundational infrastructure that every app needs -- authentication, database, Docker orchestration, and mock services for local development. Claude copies these files into the new project during the Build phase and replaces placeholders with app-specific values.
+## What Is This?
 
-## How Claude Uses This During /make-it
+TechDebt helps IT, Finance, and leadership teams make confident decisions about their software portfolio. It pulls data from the systems you already use -- procurement, identity, risk, spend analytics, and Microsoft Graph -- and brings it all together in one place.
 
-1. **Design phase** determines the app slug, ports, users, and integrations
-2. **Build phase** copies scaffold files into the project directory
-3. Placeholders are replaced with values from `app-context.json`
-4. App-specific code (frontend, backend, migrations) is generated on top of this foundation
-5. `seed-mock-services.sh` is customized with the app's users and any extra mock services
+Instead of spreadsheets and guesswork, you get a clear picture:
 
-## Files
+- **What do we pay for?** Contracts, licenses, and costs from Workday
+- **Who actually uses it?** Sign-in data and adoption rates from Entra ID and Microsoft Graph
+- **Is it risky?** Vendor risk and compliance scores from AuditBoard
+- **Where are we wasting money?** Spend analytics from Tailspend
+- **What's hiding in the shadows?** Shadow IT discovery via Microsoft Graph service principals
 
-| File | Copied As-Is? | Notes |
-|------|---------------|-------|
-| `mock-services/mock-oidc/` | Yes | Complete mock OIDC provider. Ships unchanged with every app. |
-| `docker-compose.yml` | Customized | Placeholders replaced; additional services added per app |
-| `scripts/seed-mock-services.sh` | Customized | User list and extra mock seeding filled in per app |
-| `.env.example` | Customized | Additional service URLs added per app |
-| `.gitignore` | Yes | Standard Python + Node.js + Docker gitignore |
-| `backend/app/services/log_service.py` | Customized | `techdebt` in service name |
-| `backend/app/middleware/logging.py` | Customized | `techdebt` in service name |
-| `backend/app/routers/logs.py` | Yes | Activity log REST API (events, stats, clear) |
-| `frontend/app/(auth)/admin/logs/page.tsx` | Yes | Activity Logs admin UI page |
-| `backend/tests/conftest.py` | Customized | `techdebt` in emails, `[PERMISSIONS]` placeholders |
-| `backend/tests/integration/test_health.py` | Yes | Health endpoint tests |
-| `e2e/playwright.config.ts` | Customized | `3100` placeholder |
-| `e2e/tests/health.spec.ts` | Yes | Frontend + backend health smoke tests |
+Then AI analyzes the data and recommends what to **keep**, **cut**, **replace**, or **consolidate** -- with evidence and cost impact for each decision.
 
-## Placeholders
+## Who Is This For?
 
-All placeholders use the `[PLACEHOLDER_NAME]` format and are replaced during the Build phase.
+| Role | What You Do In TechDebt |
+|------|------------------------|
+| **IT Asset Management** | Manage the full app portfolio, connect data sources, review AI recommendations |
+| **Finance** | Review cost data, approve or reject spending decisions |
+| **Department Heads** | Submit recommendations for apps in your department with justification |
+| **Leadership / Viewers** | View dashboards, track decisions, monitor portfolio health |
 
-| Placeholder | Description | Example |
-|-------------|-------------|---------|
-| `TechDebt` | Human-readable app name | DeliverIt |
-| `techdebt` | Kebab-case identifier (used for DB, containers) | deliver-it |
-| `3100` | Host port mapped to frontend container port 3000 | 3100 |
-| `8100` | Host port mapped to backend container port 8000 | 8100 |
-| `5500` | Host port mapped to PostgreSQL container port 5432 | 5500 |
-| `10090` | Host port mapped to mock-oidc container port 10090 | 10090 |
-| `[SEED_USERS]` | JSON array of `{sub, email, name}` for seed script | See below |
-| `[ADDITIONAL_SERVICE_ENVS]` | Extra env vars in backend service | `JIRA_BASE_URL=...` |
-| `[ADDITIONAL_MOCK_SERVICES]` | Extra service definitions in docker-compose | mock-jira service block |
-| `[ADDITIONAL_MOCK_SEED]` | Extra seeding logic in seed script | Jira project creation |
-| `[ADDITIONAL_SERVICE_URLS]` | Extra env var docs in .env.example | `JIRA_BASE_URL=...` |
+## What You Can Do
 
-### SEED_USERS Example
+- **Dashboard** -- See total apps under review, total spend, average adoption rate, and AI recommendation breakdown at a glance
+- **Application Portfolio** -- Browse 100+ applications with search, filtering by category/status/recommendation, and drill-down detail pages showing usage stats, cost per user, and adoption trends
+- **AI Recommendations** -- Review AI-generated keep/cut/replace/consolidate recommendations backed by data from all connected sources
+- **Decision Workflow** -- Department heads submit recommendations with justification; IT and Finance review and approve
+- **Data Sources** -- Connect and manage integrations (Workday, AuditBoard, Entra ID, Tailspend, Microsoft Graph), monitor sync status, test connections, add new sources from a built-in catalog
+- **Microsoft Graph Intelligence** -- Discover shadow IT apps, analyze license waste, compare M365 adoption vs. third-party overlap, and flag security risks
+- **AI Instructions** -- Manage and version the AI prompts that power analysis (Graph Intelligence Analyzer, Cost Savings, Consolidation Finder, Vendor Risk Assessment, and more)
+- **Voluntary Submissions** -- Employees can report apps they use that IT might not know about
+- **Admin** -- Manage users, roles, permissions, application settings, and activity logs
+
+---
+
+## Prerequisites
+
+You need three things installed on your machine:
+
+| Tool | What It Does | How to Install |
+|------|-------------|----------------|
+| **Git** | Version control | [git-scm.com/downloads](https://git-scm.com/downloads) |
+| **Docker Desktop** | Runs the app and all its services | [docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop/) |
+| **Node.js 18+** | Only needed if you want to run the frontend outside Docker | [nodejs.org](https://nodejs.org/) (optional) |
+
+**Docker Desktop** is the only real requirement beyond Git. Everything else -- the database, the backend, the frontend, the mock services -- all runs inside Docker containers.
+
+### Verify Your Setup
 
 ```bash
-SEED_USERS='[
-  {"sub": "mock-admin", "email": "admin@deliver-it.local", "name": "Admin User"},
-  {"sub": "mock-manager", "email": "manager@deliver-it.local", "name": "Manager User"},
-  {"sub": "mock-user", "email": "user@deliver-it.local", "name": "Regular User"},
-  {"sub": "mock-viewer", "email": "viewer@deliver-it.local", "name": "Viewer User"}
-]'
+git --version    # Should show 2.x or higher
+docker --version # Should show 24.x or higher
+docker compose version # Should show 2.x or higher
 ```
 
-The `sub` values must exactly match the `oidc_subject` column in the database seed migration. This alignment is what connects "the person who logs in" to "the user row with the correct role."
+---
+
+## Quick Start
+
+Get the app running in under 5 minutes.
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/SleepNumberInc/techdebt.git
+cd techdebt
+```
+
+### 2. Create Your Environment File
+
+```bash
+cp .env.example .env
+```
+
+Then generate a JWT secret and add it to `.env`:
+
+```bash
+# macOS / Linux
+openssl rand -hex 32
+```
+
+Open `.env` in any text editor and paste the generated value after `JWT_SECRET=`.
+
+### 3. Start the App
+
+```bash
+docker compose --profile dev up --build -d
+```
+
+This builds and starts 8 services:
+- **Frontend** (Next.js) -- your browser interface
+- **Backend** (FastAPI) -- the API server
+- **Database** (PostgreSQL) -- stores all application data
+- **Mock OIDC** -- simulates corporate single sign-on
+- **Mock Workday** -- simulates procurement data
+- **Mock AuditBoard** -- simulates vendor risk data
+- **Mock Entra ID** -- simulates identity/usage analytics
+- **Mock Graph** -- simulates Microsoft Graph API (app discovery, licenses, sign-ins)
+
+The first build takes 2-3 minutes. Subsequent starts take about 15 seconds.
+
+### 4. Seed the Login System
+
+```bash
+bash scripts/seed-mock-services.sh
+```
+
+This registers test users and configures the login redirect. You only need to run this once (or after recreating containers).
+
+### 5. Open the App
+
+Go to **http://localhost:3100** in your browser.
+
+You'll see a login screen with test users. Pick one to sign in:
+
+| User | Role | What They Can Access |
+|------|------|---------------------|
+| **Admin User** | Super Admin | Everything -- full admin access |
+| **IT Admin** | Admin | App portfolio, data sources, recommendations, decisions |
+| **Finance Reviewer** | Finance Reviewer | Cost data, financial decisions |
+| **Department Head** | Department Head | Submit recommendations, view dashboards |
+| **Viewer User** | Viewer | Read-only access to dashboards and app details |
+
+---
 
 ## Architecture
 
+```
+Browser
+  |
+  v
+Frontend (Next.js, port 3100)
+  |  -- same-origin proxy for API calls
+  v
+Backend (FastAPI, port 8100)
+  |  -- async Python, JWT auth, RBAC middleware
+  v
+PostgreSQL (port 5500)
+  |  -- 10 Alembic migrations, 100+ seeded apps
+  |
+  +-- Mock Workday (port 9001)      -- procurement contracts
+  +-- Mock AuditBoard (port 9002)   -- vendor risk scores
+  +-- Mock Entra ID (port 9003)     -- sign-in analytics
+  +-- Mock Tailspend (port 9004)    -- spend analytics
+  +-- Mock Graph (port 9005)        -- Microsoft Graph API
+  +-- Mock OIDC (port 10090)        -- corporate SSO simulation
+```
+
+### Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | Next.js 15, TypeScript, Tailwind CSS |
+| Backend | FastAPI, Python 3.12, SQLAlchemy (async), Pydantic |
+| Database | PostgreSQL 16 with Alembic migrations |
+| Auth | OIDC (Azure AD in production, mock-oidc locally) |
+| Authorization | Database-driven RBAC with permission middleware |
+| AI | Managed prompt system with versioning, tagging, and test cases |
+| Infrastructure | Docker Compose with health checks on all services |
+
 ### Authentication Flow
 
-```
-Browser                Frontend (Next.js)         Backend (FastAPI)        mock-oidc
-  |                         |                          |                      |
-  |-- click "Sign In" ----->|                          |                      |
-  |                         |-- redirect to /authorize ---------------------->|
-  |<-- login page (user list) ------------------------------------------------|
-  |-- select user ---------------------------------------------------------->|
-  |<-- redirect with ?code= ----------------------------                      |
-  |-- /api/auth/callback -->|                          |                      |
-  |                         |-- POST /token (code) ----|--------------------->|
-  |                         |<-- access_token + id_token ----------------------|
-  |                         |-- GET /userinfo ----------|--------------------->|
-  |                         |<-- {sub, email, name} ---|----------------------|
-  |                         |-- POST /auth/callback --->|                      |
-  |                         |                          |-- lookup user by sub  |
-  |                         |                          |-- get role + perms    |
-  |                         |                          |-- create session JWT  |
-  |                         |<-- set cookie + redirect-|                      |
-  |<-- authenticated -------|                          |                      |
-```
+The app uses OpenID Connect (OIDC) for authentication:
 
-Key points:
-- The frontend proxies auth requests to the backend (Next.js API routes)
-- The backend exchanges the code for tokens server-to-server (never exposed to browser)
-- User roles come from the application database, NOT from the OIDC provider
-- The mock-oidc provider only supplies identity (sub, email, name)
+1. User clicks "Sign In" and is redirected to the identity provider
+2. After authenticating, the provider sends back an authorization code
+3. The backend exchanges the code for user identity (server-to-server, never exposed to the browser)
+4. The backend looks up the user in the database to get their role and permissions
+5. A signed JWT cookie is set -- this is your session
 
-### Internal/External URL Split
+**Key point:** Roles and permissions come from the application database, not from the identity provider. This means you can manage access entirely within TechDebt.
 
-mock-oidc natively handles the Docker networking split:
-- `MOCK_OIDC_EXTERNAL_BASE_URL` (e.g., `http://localhost:10090`) -- used for the `authorization_endpoint` in the discovery document, since the browser navigates to it directly
-- `MOCK_OIDC_INTERNAL_BASE_URL` (e.g., `http://mock-oidc:10090`) -- used for `token_endpoint`, `userinfo_endpoint`, and `jwks_uri`, since the backend calls these server-to-server inside the Docker network
+### Data Source Integration
 
-This eliminates the need for `OIDC_INTERNAL_URL` environment variables or URL rewriting logic in the application.
+Each data source type owns specific fields on the Application model to prevent conflicts:
 
-### RBAC
+| Source Type | Authoritative Fields |
+|------------|---------------------|
+| Procurement (Workday) | Cost, licenses, contract dates, vendor |
+| Identity Analytics (Entra ID) | Active users, adoption rate, last login |
+| Vendor Risk (AuditBoard) | Risk score, compliance status |
+| Spend Analytics (Tailspend) | Annual cost, cost per license |
+| Platform Intelligence (Graph) | Active users, adoption, app name, vendor, category |
+| Manual | Any field not owned by another source |
 
-The database has four tables for role-based access control:
-- `roles` -- system roles (Super Admin, Admin, Manager, User) plus custom roles
-- `permissions` -- page-level CRUD permissions (e.g., `forecasts.view`, `users.create`)
-- `role_permissions` -- junction table mapping roles to permissions
-- `users` -- has a `role_id` foreign key and `oidc_subject` for OIDC identity mapping
+---
 
-Every route handler uses `require_permission(resource, action)` middleware. The app never checks role strings directly.
+## Common Tasks
 
-### Health Checks
+### Stop the App
 
-All health checks use `127.0.0.1` (not `localhost`) to avoid IPv6 resolution issues in Alpine containers:
-- **Frontend**: `wget --spider -q http://127.0.0.1:3000` (Alpine has wget)
-- **Backend**: `python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"` (slim image, no wget/curl)
-- **mock-oidc**: `python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:10090/health')"` (slim image)
-- **PostgreSQL**: `pg_isready -U techdebt`
-
-### Activity Logs
-
-Every scaffolded app includes an in-memory activity log for observability:
-- **LogStore** -- circular buffer (configurable via `LOG_BUFFER_SIZE`, default 10000) with FIFO eviction
-- **LogEvent** -- captures timestamp, type, method, path, url, status, duration, service, user, ip, user_agent, error
-- **RequestLoggingMiddleware** -- captures inbound API requests (excludes health/static), including client IP and user-agent
-- **attach_outbound_logging()** -- httpx event hooks that log outbound calls with URL sanitization and timing
-- **URL sanitization** -- strips sensitive query params (token, key, secret, password, auth, api_key) before logging
-- **REST API** -- `GET /api/admin/logs/events` (with offset, path, status_min/max, user_email, q filters), `GET /api/admin/logs/stats` (with type/service/status breakdowns), `DELETE /api/admin/logs/events`
-- **Admin UI** -- Activity Logs tab with stats cards, status breakdown bar, filters (type, method, free-text search), event table with user column, auto-refresh toggle, clear button
-- **RBAC** -- requires `admin.logs.read` and `admin.logs.delete` permissions (seeded in the app's seed migration)
-
-#### Outbound Logging
-
-Service clients wire outbound logging during creation using `attach_outbound_logging()`:
-
-```python
-from app.services.log_service import attach_outbound_logging
-
-client = httpx.AsyncClient(base_url=settings.JIRA_BASE_URL)
-attach_outbound_logging(client, "jira")
+```bash
+docker compose --profile dev down
 ```
 
-This is added per-app during the Build phase for each external integration.
+Your data is preserved in a Docker volume. Next time you start, everything is right where you left it.
 
-### Trailing-Slash ASGI Wrapper
+### Reset Everything (Fresh Start)
 
-FastAPI registers list endpoints with a trailing slash (e.g., `/api/rfcs/`). When requests arrive through the Next.js reverse proxy without the slash, FastAPI's built-in redirect leaks the internal Docker hostname (e.g., `http://backend:8000/api/rfcs/`). The `TrailingSlashASGI` wrapper in `main.py` silently rewrites matching paths instead of issuing a redirect.
+```bash
+docker compose --profile dev down -v   # -v removes the database volume
+docker compose --profile dev up --build -d
+bash scripts/seed-mock-services.sh
+```
 
-### Test Infrastructure
+### View Logs
 
-The scaffold includes a ready-to-use test setup:
-- **pytest.ini** -- asyncio_mode=auto, test discovery config
-- **conftest.py** -- in-memory SQLite with UUID compat, auth bypass via dependency overrides, `admin_client`/`user_client`/`viewer_client` fixtures, `seed_user()` helper
-- **test_health.py** -- health endpoint smoke tests (always valid for any app)
-- **e2e/** -- Playwright config + health smoke test, targeting `http://localhost:3100`
+```bash
+# All services
+docker compose --profile dev logs -f
 
-Test users in conftest.py have `[PERMISSIONS]` placeholders that the Build phase fills in to match the app's RBAC seed data.
+# Just the backend
+docker compose --profile dev logs -f backend
 
-### Secret Enforcement
+# Just mock-graph
+docker compose --profile dev logs -f mock-graph
+```
 
-The scaffold includes a startup validation gate controlled by `ENFORCE_SECRETS`:
+### Run Backend Tests
 
-- **`ENFORCE_SECRETS=false`** (default, local dev) -- app starts with weak/mock secrets
-- **`ENFORCE_SECRETS=true`** (production) -- app refuses to start if JWT_SECRET is weak (<32 chars or a known default) or OIDC_CLIENT_SECRET is still the mock value
+```bash
+docker compose --profile dev exec backend pytest -v
+```
 
-This is called at startup in `main.py` via `enforce_secrets()`. The /ship-it deployment pipeline sets `ENFORCE_SECRETS=true` in production environment variables.
+### Check Service Health
 
-### Port Selection
+```bash
+docker compose --profile dev ps
+```
 
-Default ports (3000, 5432, 8000) are almost always taken on developer machines running multiple Docker projects. During the Design phase, `/make-it` checks `lsof -i :PORT` and selects available ports. The scaffold placeholders make this remapping seamless.
+All services should show `(healthy)` in the STATUS column.
+
+---
+
+## Project Structure
+
+```
+techdebt/
+  backend/
+    app/
+      main.py              # FastAPI application entry point
+      models/              # SQLAlchemy models (Application, DataSource, Decision, etc.)
+      routers/             # API endpoints (auth, applications, data-sources, etc.)
+      schemas/             # Pydantic request/response models
+      middleware/           # Auth, permissions, request logging
+      services/            # Log service, prompt service, settings service
+    alembic/versions/      # Database migrations (001-010)
+    tests/                 # pytest unit and integration tests
+  frontend/
+    app/                   # Next.js App Router pages
+      (auth)/              # Authenticated pages (dashboard, applications, etc.)
+      login/               # Login page
+    components/            # Reusable UI components (DataTable, sidebar, modals, etc.)
+    lib/                   # API client, auth context, types
+  mock-services/
+    mock-oidc/             # Corporate SSO simulator
+    mock-workday/          # Procurement data (contracts, licenses)
+    mock-auditboard/       # Vendor risk and compliance scores
+    mock-entra/            # Identity analytics (sign-ins, usage)
+    mock-tailspend/        # Spend analytics
+    mock-graph/            # Microsoft Graph API (service principals, licenses, M365 usage)
+  scripts/
+    seed-mock-services.sh  # Register test users and configure login
+  docker-compose.yml       # Orchestrates all 8 services
+  .env.example             # Environment variable template
+```
+
+---
+
+## Environment Variables
+
+Copy `.env.example` to `.env` and fill in the values. The defaults work for local development.
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `DATABASE_URL` | Yes | `postgresql+asyncpg://techdebt:techdebt@db:5432/techdebt` | PostgreSQL connection string |
+| `JWT_SECRET` | Yes | *(generate one)* | Secret key for signing auth tokens. Generate with `openssl rand -hex 32` |
+| `OIDC_ISSUER_URL` | Yes | `http://mock-oidc:10090` | Identity provider URL (mock-oidc for local dev) |
+| `OIDC_CLIENT_ID` | Yes | `mock-oidc-client` | OIDC client identifier |
+| `OIDC_CLIENT_SECRET` | Yes | `mock-oidc-secret` | OIDC client secret |
+| `FRONTEND_URL` | Yes | `http://localhost:3100` | Where the frontend is accessible |
+| `BACKEND_URL` | Yes | `http://localhost:8100` | Where the backend is accessible |
+| `ENFORCE_SECRETS` | No | `false` | Set to `true` in production to require strong secrets |
+| `LOG_BUFFER_SIZE` | No | `10000` | Max activity log entries kept in memory |
+
+### Data Source URLs (Auto-configured in Docker)
+
+| Variable | Default | Service |
+|----------|---------|---------|
+| `WORKDAY_BASE_URL` | `http://mock-workday:9001` | Procurement data |
+| `AUDITBOARD_BASE_URL` | `http://mock-auditboard:9002` | Vendor risk data |
+| `ENTRA_ID_BASE_URL` | `http://mock-entra:9003` | Identity analytics |
+| `TAILSPEND_BASE_URL` | `http://mock-tailspend:9004` | Spend analytics |
+| `GRAPH_BASE_URL` | `http://mock-graph:9005` | Microsoft Graph API |
+
+---
+
+## Production Deployment
+
+For production, you'll need to:
+
+1. **Replace mock-oidc** with your real identity provider (Azure AD, Okta, etc.)
+   - Set `OIDC_ISSUER_URL`, `OIDC_CLIENT_ID`, and `OIDC_CLIENT_SECRET` to your provider's values
+2. **Replace mock services** with real API connections
+   - Update the `*_BASE_URL` variables to point to your actual Workday, AuditBoard, Entra ID, etc.
+3. **Use a managed PostgreSQL** database
+   - Update `DATABASE_URL` to your production connection string
+4. **Set `ENFORCE_SECRETS=true`** to require strong JWT and OIDC secrets at startup
+5. **Generate a strong `JWT_SECRET`** with `openssl rand -hex 32`
+
+The mock services are for local development only and are not included in production deployments (they're behind the `dev` Docker Compose profile).
+
+---
+
+## Troubleshooting
+
+**"redirect_uri not registered for client"**
+Run `bash scripts/seed-mock-services.sh` to register the login redirect URI. This is needed after container recreation.
+
+**A service shows as "unhealthy"**
+Check its logs: `docker compose --profile dev logs <service-name>`. Common causes: port conflict, missing dependency, or a previous container didn't shut down cleanly. Try `docker compose --profile dev down && docker compose --profile dev up -d`.
+
+**Port already in use**
+Another app is using one of TechDebt's ports. Check with `lsof -i :3100` (or whichever port). Either stop the other app or modify the port mapping in `docker-compose.yml`.
+
+**Login page shows no users**
+Run the seed script: `bash scripts/seed-mock-services.sh`
+
+**Database seems empty or stale**
+The database is initialized via Alembic migrations on first startup. To reset: `docker compose --profile dev down -v` then start fresh.
+
+---
+
+## License
+
+See [LICENSE](LICENSE) for details.
